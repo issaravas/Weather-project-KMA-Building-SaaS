@@ -4,8 +4,8 @@ import json
 import requests
 from flask import Flask, jsonify, request
 
-API_TOKEN = "123456"
-API_KEY ='FUZZR78UGEZAYXR6PV9EQHD4Q'
+API_TOKEN = "[your special token]"
+API_KEY ='API_KEY (from https://www.visualcrossing.com/account)'
 
 app = Flask(__name__)
 
