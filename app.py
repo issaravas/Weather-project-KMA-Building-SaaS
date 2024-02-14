@@ -1,8 +1,11 @@
 import datetime as dt
+import json
+
 import requests
 from flask import Flask, jsonify, request
 
-API_KEY = "FUZZR78UGEZAYXR6PV9EQHD4Q"
+API_TOKEN = "123456"
+API_KEY ='FUZZR78UGEZAYXR6PV9EQHD4Q'
 
 app = Flask(__name__)
 
@@ -21,10 +24,9 @@ class InvalidUsage(Exception):
         rv["message"] = self.message
         return rv
 
-def get_weather_data(location: str, date: str):
-    base_url = "https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/"
-
-    url = f"{base_url}{location}/{date}?unitGroup=metric&key={API_KEY}"
+def get_weather_data(location, date):
+    base_url = "https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline"
+    url = f"{base_url}/{location}/{date}?key={API_KEY}&include=days&unitGroup=metric"
 
     response = requests.get(url)
 
@@ -46,16 +48,57 @@ def home_page():
 @app.route("/weather", methods=["POST"])
 def weather_endpoint():
     json_data = request.get_json()
+    
+    if json_data.get("token") is None:
+        raise InvalidUsage("Token is required", status_code=400)
+    if json_data.get("requester_name") is None:
+        raise InvalidUsage("Requester name is required", status_code=400)
+    if json_data.get("location") is None:
+        raise InvalidUsage("Location is required", status_code=400)
+    if json_data.get("date") is None:
+        raise InvalidUsage("Date is required", status_code=400)
 
+    token = json_data.get("token")
+    
+    if token != API_TOKEN:
+        raise InvalidUsage("wrong API token", status_code=403)
+
+    requester_name = json_data.get("requester_name")
     location = json_data.get("location")
     date = json_data.get("date")
-
-    if not location or not date:
-        raise InvalidUsage("Location and date are required", status_code=400)
+    timestamp = dt.datetime.utcnow().replace(microsecond=0).isoformat()
 
     weather_data = get_weather_data(location, date)
 
-    return jsonify(weather_data)
+    #converting windspeed from miles per hour to kilometres per hour
+    windspeed_ml = weather_data.get("days")[0]["windspeed"]
+    windspeed_kph = round(windspeed_ml * 1.609)
+    
+    #adding recommendation based on Precipitation Type
+    preciptype = weather_data.get("days")[0]["preciptype"]   
+    recommendation = ""
+    if not preciptype:
+        recommendation = "No precipitation information available."
+    elif "rain" in preciptype:
+        recommendation = "It's a rainy day, don't forget to bring an umbrella with you!"
+    elif "snow" in preciptype:
+        recommendation = "It's a snowy day, please dress warmly!"
 
-if __name__ == "__main__":
-    app.run(debug=True)
+    #outputting the result    
+    result = {
+        "requester_name": requester_name,
+        "timestamp": timestamp,
+        "location": location,
+        "date": date,
+        "weather": {
+            "temp_c": weather_data.get("days")[0]["temp"],
+            "feelslike": weather_data.get("days")[0]["feelslike"],
+            "wind_kph": windspeed_kph,
+            "preciptype": preciptype,
+            "moonphase": weather_data.get("days")[0]["moonphase"],
+            "sunrise": weather_data.get("days")[0]["sunrise"],            
+            "sunset": weather_data.get("days")[0]["sunset"],
+            "recommendation": recommendation
+        }
+    }
+    return result
